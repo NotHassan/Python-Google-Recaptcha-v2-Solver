@@ -14,4 +14,4 @@ Transcription Fails: 1
 Recaptcha Solutions: 1
 ```
 
-Note that there is some additional modifications not included in this version that bypasses Google's webdriver check. If you intend to use this, expect ReCaptcha to ask to solve multiple captchas and possibly timeout.
+Note that there are some additional modifications not included in this version that bypasses Google's webdriver check. If you intend to use this, expect ReCaptcha to ask to solve multiple captchas and possibly timeout.
