@@ -54,7 +54,7 @@ class Gcaptcha:
 
         opts = webdriver.ChromeOptions()
         opts.headless = True
-        # opts.add_argument("--mute-audio")
+        opts.add_argument("--mute-audio")
 
         with webdriver.Chrome('chromedriver', options=opts, service_log_path=os.path.devnull) as self.driver:
             self.driver.maximize_window()
