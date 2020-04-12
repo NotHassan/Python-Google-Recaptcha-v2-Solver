@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import os
+import io
 import time
 import urllib.request
-from random import randint, uniform
 
-import io
 from google.cloud import speech_v1
+from random import randint, uniform
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
