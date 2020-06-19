@@ -47,7 +47,7 @@ class Gcaptcha:
 
         # Set Chrome to run in headless mode and mute the audio
         opts = webdriver.ChromeOptions()
-        # opts.headless = True
+        opts.headless = True
         opts.add_argument("--mute-audio")
 
         # Try to use the current chromedriver, if outdated or missing, download
