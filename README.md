@@ -5,8 +5,12 @@ This is a working ReCaptcha v2 solver created with Python.
 Create a Google Cloud Speech-to-Text API service account and API key file
 The API key file must be in the same directory as gcaptcha_solver.py and must be named s2t-api.json
 
-Below is an example output of the solve_recaptcha_demo.py file.
+Install all requirements before using the solver:
+```
+pip install -r requirements.txt
+```
 
+Below is an example output of the solve_recaptcha_demo.py file.
 
 ```
 Started solve_recaptcha_demo.py
