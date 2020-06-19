@@ -2,7 +2,7 @@
 from gcaptcha_solver import Gcaptcha
 import time
 
-print('Started solve_recaptcha.py')
+print('Started solve_recaptcha_demo.py')
 start_time = time.time()
 gcaptcha = Gcaptcha('https://www.google.com/recaptcha/api2/demo')
 print('Google Recaptcha response: {}'.format(gcaptcha.response))
