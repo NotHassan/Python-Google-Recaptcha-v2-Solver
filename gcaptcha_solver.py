@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 import os
-import io
+import subprocess
 import time
+import re
+import requests
 import urllib.request
-
+import zipfile
+import io
 from google.cloud import speech_v1
+from sys import platform
 from random import randint, uniform
+from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
@@ -14,23 +19,11 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 
-def transcribe(mp3):
-    client = speech_v1.SpeechClient()
-    config = {'language_code': 'en-US'}
+# Install all requirements before executing script
+# pip install -r requirements.txt
 
-    with io.open(mp3, 'rb') as f:
-        content = f.read()
-
-    audio = {'content': content}
-    response = client.recognize(config, audio)
-
-    try:
-        transcript = response.results[0].alternatives[0].transcript
-        confidence = response.results[0].alternatives[0].confidence
-    except IndexError:
-        return 1
-    else:
-        return transcript if confidence >= 0.60 else 2
+# Create Google Cloud Speech-to-Text API service account and API key file
+# The API key file must be in the same directory as this script and must be named s2t-api.json
 
 
 class Gcaptcha:
@@ -52,61 +45,69 @@ class Gcaptcha:
         self.transcription.failed = 0
         self.recaptcha.solved = 0
 
+        # Set Chrome to run in headless mode and mute the audio
         opts = webdriver.ChromeOptions()
-        opts.headless = True
+        # opts.headless = True
         opts.add_argument("--mute-audio")
 
-        with webdriver.Chrome('chromedriver', options=opts, service_log_path=os.path.devnull) as self.driver:
-            self.driver.maximize_window()
-            self.driver.get(url)
-            self.__bypass_webdriver_check()
-            time.sleep(uniform(2.5, 3))
-            # site_key = driver.find_element(By.CSS_SELECTOR, '.g-recaptcha').get_attribute('data-sitekey')
+        # Try to use the current chromedriver, if outdated or missing, download
+        # and patch the version that corresponds with the installed Chrome version
+        try:
+            self.driver = webdriver.Chrome('./chromedriver', options=opts, service_log_path=os.path.devnull)
+        except:
+            get_chromedriver()
+            self.driver = webdriver.Chrome('./chromedriver', options=opts, service_log_path=os.path.devnull)
 
-            # Initialize gcaptcha solver
-            self.__initialize()
+        self.driver.maximize_window()
+        self.driver.get(url)
+        self.__bypass_webdriver_check()
 
-            while True:
-                # Download MP3 file
-                mp3_file = self.__download_mp3()
+        # Initialize gcaptcha solver
+        self.__initialize()
 
-                # Transcribe MP3 file
-                audio_transcription = transcribe(mp3_file)
-                self.transcription.attempts += 1
+        while True:
+            # Download MP3 file
+            mp3_file = self.__download_mp3()
 
-                # If the MP3 file is properly transcribed
-                if type(audio_transcription) is str:
-                    self.transcription.successful += 1
+            # Transcribe MP3 file
+            audio_transcription = transcribe(mp3_file)
+            self.transcription.attempts += 1
 
-                    # Verify transcription
-                    verify = self.__submit_transcription(audio_transcription)
+            # If the MP3 file is properly transcribed
+            if type(audio_transcription) is str:
+                self.transcription.successful += 1
 
-                    # Transcription successful with confidence >60%
-                    if verify:
-                        gcaptcha_response = self.__get_response()
-                        self.response = gcaptcha_response
-                        self.recaptcha.solved += 1
+                # Verify transcription
+                verify = self.__submit_transcription(audio_transcription)
 
-                        # Delete MP3 file
-                        os.remove(mp3_file)
-                        break
-                    # Multiple correct solutions required. Solving again.
-                    else:
-                        self.recaptcha.solved += 1
-
-                        # Delete MP3 file
-                        os.remove(mp3_file)
-                        time.sleep(uniform(2, 4))
-                # If the MP3 file could not be transcribed
-                else:
-                    self.transcription.failed += 1
+                # Transcription successful with confidence >60%
+                if verify:
+                    gcaptcha_response = self.__get_response()
+                    self.response = gcaptcha_response
+                    self.recaptcha.solved += 1
 
                     # Delete MP3 file
                     os.remove(mp3_file)
+                    self.driver.close()
+                    self.driver.quit()
+                    break
+                # Multiple correct solutions required. Solving again.
+                else:
+                    self.recaptcha.solved += 1
 
-                    # Click on the "Get a new challenge" button to use a new MP3 file
-                    self.__refresh_mp3()
+                    # Delete MP3 file
+                    os.remove(mp3_file)
                     time.sleep(uniform(2, 4))
+            # If the MP3 file could not be transcribed
+            else:
+                self.transcription.failed += 1
+
+                # Delete MP3 file
+                os.remove(mp3_file)
+
+                # Click on the "Get a new challenge" button to use a new MP3 file
+                self.__refresh_mp3()
+                time.sleep(uniform(2, 4))
 
     def __initialize(self):
         # Access initial gcaptcha iframe
@@ -178,7 +179,7 @@ class Gcaptcha:
 
             return mp3
         else:
-            print('Too many requests have been sent to Google. You are currently being blocked by their servers.')
+            Error('Too many requests have been sent to Google. You are currently being blocked by their servers.')
             exit(-1)
 
     def __refresh_mp3(self):
@@ -199,9 +200,12 @@ class Gcaptcha:
         input_field = self.driver.find_element(By.CSS_SELECTOR, '#audio-response')
 
         # Input response from transcription character by character with random delay between keystrokes
-        for char in text:
-            time.sleep(uniform(0.1, 0.2))
-            input_field.send_keys(char)
+        # for char in text:
+        #     time.sleep(uniform(0.1, 0.2))
+        #     input_field.send_keys(char)
+
+        # Instantly type the full text without delays because Google isn't checking delays between keystrokes
+        input_field.send_keys(text)
 
         # Click "Verify" button
         verify_button = self.driver.find_element(By.CSS_SELECTOR, '#recaptcha-verify-button')
@@ -217,7 +221,7 @@ class Gcaptcha:
         # Check to see if verified by recaptcha
         try:
             self.driver.find_element(By.CSS_SELECTOR, '.recaptcha-checkbox-checked')
-        except NoSuchElementException as e:
+        except NoSuchElementException:
             return False
         else:
             return True
@@ -227,3 +231,127 @@ class Gcaptcha:
         self.driver.switch_to.default_content()
         response = self.driver.find_element(By.CSS_SELECTOR, '#g-recaptcha-response').get_attribute('value')
         return response
+
+
+class Error(Exception):
+    def __init__(self, message):
+        get_files = os.listdir()
+        match_regex = re.compile(r'^audio\d+.mp3|chromedriver_\w+\d+.zip$')
+        filtered_files = [f for f in get_files if match_regex.match(f)]
+
+        for file in filtered_files:
+            os.remove(file)
+
+        raise Exception(f'ERROR: {message}')
+
+
+def transcribe(mp3):
+    # You must create a Google Cloud Speech-to-Text API service account and create a key called 's2t-api.json'
+    client = speech_v1.SpeechClient.from_service_account_json('./s2t-api.json')
+    config = {'language_code': 'en-US'}
+
+    with io.open(mp3, 'rb') as f:
+        content = f.read()
+
+    audio = {'content': content}
+    response = client.recognize(config, audio)
+
+    try:
+        transcript = response.results[0].alternatives[0].transcript
+        confidence = response.results[0].alternatives[0].confidence
+    except IndexError:
+        return 1
+    else:
+        return transcript if confidence >= 0.60 else 2
+
+
+def get_os():
+    if platform == 'win32':
+        return 'Windows'
+    elif platform == 'darwin':
+        return 'Mac'
+    elif platform == 'linux' or platform == 'linux2':
+        return 'Linux'
+    else:
+        return None
+
+
+def chrome_version(os_name):
+    version = None
+
+    # Depending on the OS, use different ways to figure out what version of Chrome is installed
+    if os_name == 'Windows':
+        chrome_path_files = os.listdir('C:\\Program Files (x86)\\Google\\Chrome\\Application\\')
+        version = [name for name in chrome_path_files if re.match(r'\d+.\d+.\d+.\d+', name)][0]
+    elif os_name == 'Mac':
+        output = str(subprocess.check_output('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --version',
+                                             shell=True))
+        version = re.search(r'(\d+.\d+.\d+.\d+)', output)[1]
+    elif os_name == 'Linux':
+        output = str(subprocess.check_output('google-chrome --version', shell=True))
+        version = re.search(r'(\d+.\d+.\d+.\d+)', output)[1]
+
+    return version
+
+
+def driver_url(version, os_name):
+    if os_name == 'Windows':
+        os_id = 'win32'
+    elif os_name == 'Mac':
+        os_id = 'mac64'
+    elif os_name == 'Linux':
+        os_id = 'linux64'
+    else:
+        Error('Could not detect the OS when trying to get the URL for chromedriver.')
+
+    page = requests.get('https://chromedriver.chromium.org/downloads')
+    soup = BeautifulSoup(page.content, 'html.parser')
+
+    # Get list of chromedriver versions
+    lists = soup.select('.sites-layout-tile > div > h2 + div > ul > li')
+    lists.pop()
+
+    # Match Chrome against each chromedriver version to find the compatible version
+    for item in lists:
+        data = re.match(r'.*?href=\"(.*?)\".*?ChromeDriver\s+((\d+).\d+.\d+.\d+)', item.decode())
+        base_version = re.match(r'^(\d+)', version)[1]
+        if base_version == data[3]:
+            return f'https://chromedriver.storage.googleapis.com/{data[2]}/chromedriver_{os_id}.zip'
+
+
+def get_chromedriver():
+    os_name = get_os()
+    version = chrome_version(os_name)
+    file_url = driver_url(version, os_name)
+
+    # Download the chromedriver.zip file
+    open('chromedriver.zip', 'wb').write(requests.get(file_url).content)
+
+    # Extract chromedriver
+    with zipfile.ZipFile('chromedriver.zip', 'r') as zip_file:
+        zip_file.extractall()
+
+    os.remove('chromedriver.zip')
+
+    # Set the name of the chromedriver file
+    driver_name = 'chromedriver'
+
+    # Add .exe extension if script is being executed on Windows
+    if os_name == 'Windows':
+        driver_name += '.exe'
+    # Give execute(x) permissions to chromedriver if the script is executed on Mac or Linux
+    elif os_name == 'Mac' or os_name == 'Linux':
+        subprocess.check_output(f'chmod +x {driver_name}', shell=True)
+
+    # The remainder of the function patches chromedriver which will
+    # bypass any checks to see if the browser is being automated
+    with open(driver_name, 'rb') as f:
+        content = f.read()
+
+    key_string = re.search(bytes(r"var key = '.*?'", 'Latin-1'), content)[0]
+    dummy_fill = ''.join(['0' for i in range(len(key_string) - 12)])
+    new_key_string = re.sub(bytes(r"'.*?'", 'Latin-1'), bytes(f"'{dummy_fill}'", 'Latin-1'), key_string)
+    new_content = content.replace(key_string, new_key_string)
+
+    with open(driver_name, 'wb') as f:
+        f.write(new_content)
