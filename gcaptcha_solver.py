@@ -252,7 +252,7 @@ def transcribe(mp3):
         content = f.read()
 
     audio = {'content': content}
-    response = client.recognize(config, audio)
+    response = client.recognize(config=config, audio=audio)
 
     try:
         transcript = response.results[0].alternatives[0].transcript
