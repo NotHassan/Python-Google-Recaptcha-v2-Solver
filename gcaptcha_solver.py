@@ -51,7 +51,7 @@ class Gcaptcha:
         opts.add_argument("--mute-audio")
 
         # Try to use the current chromedriver, if outdated or missing, download
-        # and patch the version that corresponds with the installed Chrome version
+        # and patch the version that corresponds with the installed Google Chrome version
         try:
             self.driver = webdriver.Chrome('./chromedriver', options=opts, service_log_path=os.path.devnull)
         except:
@@ -148,8 +148,7 @@ class Gcaptcha:
         cursor.perform()
 
     def __bypass_webdriver_check(self):
-        self.driver.execute_script(
-            'const newProto = navigator.__proto__; delete newProto.webdriver; navigator.__proto__ = newProto;')
+        self.driver.execute_script('const newProto = navigator.__proto__; delete newProto.webdriver; navigator.__proto__ = newProto;')
 
     def __download_mp3(self):
         self.driver.switch_to.default_content()
@@ -159,7 +158,7 @@ class Gcaptcha:
         # Check if the Google servers are blocking us
         if len(self.driver.find_elements(By.CSS_SELECTOR, '.rc-doscaptcha-body-text')) == 0:
             audio_file = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, '.rc-audiochallenge-tdownload-link'))
+                EC.presence_of_element_located((By.CSS_SELECTOR, '#audio-source'))
             )
 
             # Click the play button
@@ -169,7 +168,7 @@ class Gcaptcha:
             self.__mouse_click(play_button)
 
             # Get URL of MP3 file
-            audio_url = audio_file.get_attribute('href')
+            audio_url = audio_file.get_attribute('src')
 
             # Predefine the MP3 file name
             mp3 = 'audio{}.mp3'.format(randint(0, 100))
@@ -304,19 +303,13 @@ def driver_url(version, os_name):
     else:
         Error('Could not detect the OS when trying to get the URL for chromedriver.')
 
-    page = requests.get('https://chromedriver.chromium.org/downloads')
-    soup = BeautifulSoup(page.content, 'html.parser')
+    chrome_version_regex = re.search('(\d+.\d+.\d+).\d+', version)
+    chrome_version = chrome_version_regex.group(1)
 
-    # Get list of chromedriver versions
-    lists = soup.select('.sites-layout-tile > div > h2 + div > ul > li')
-    lists.pop()
+    chromedriver_version_page = requests.get('https://chromedriver.storage.googleapis.com/LATEST_RELEASE_' + chrome_version)
+    chromedriver_version = chromedriver_version_page.content.decode("utf-8")
 
-    # Match Chrome against each chromedriver version to find the compatible version
-    for item in lists:
-        data = re.match(r'.*?href=\"(.*?)\".*?ChromeDriver\s+((\d+).\d+.\d+.\d+)', item.decode())
-        base_version = re.match(r'^(\d+)', version)[1]
-        if base_version == data[3]:
-            return f'https://chromedriver.storage.googleapis.com/{data[2]}/chromedriver_{os_id}.zip'
+    return f'https://chromedriver.storage.googleapis.com/{cd_version}/chromedriver_{os_id}.zip'
 
 
 def get_chromedriver():
@@ -328,8 +321,7 @@ def get_chromedriver():
     open('chromedriver.zip', 'wb').write(requests.get(file_url).content)
 
     # Extract chromedriver
-    with zipfile.ZipFile('chromedriver.zip', 'r') as zip_file:
-        zip_file.extractall()
+    zipfile.ZipFile('chromedriver.zip', 'r').extractall()
 
     os.remove('chromedriver.zip')
 
@@ -345,13 +337,11 @@ def get_chromedriver():
 
     # The remainder of the function patches chromedriver which will
     # bypass any checks to see if the browser is being automated
-    with open(driver_name, 'rb') as f:
-        content = f.read()
+    content = open(driver_name, 'rb').read()
 
     key_string = re.search(bytes(r"var key = '.*?'", 'Latin-1'), content)[0]
     dummy_fill = ''.join(['0' for i in range(len(key_string) - 12)])
     new_key_string = re.sub(bytes(r"'.*?'", 'Latin-1'), bytes(f"'{dummy_fill}'", 'Latin-1'), key_string)
     new_content = content.replace(key_string, new_key_string)
 
-    with open(driver_name, 'wb') as f:
-        f.write(new_content)
+    open(driver_name, 'wb').write(new_content)
