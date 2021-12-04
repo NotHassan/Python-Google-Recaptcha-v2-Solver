@@ -308,7 +308,7 @@ def driver_url(version, os_name):
     chromedriver_version_page = requests.get('https://chromedriver.storage.googleapis.com/LATEST_RELEASE_' + chrome_version)
     chromedriver_version = chromedriver_version_page.content.decode("utf-8")
 
-    return f'https://chromedriver.storage.googleapis.com/{cd_version}/chromedriver_{os_id}.zip'
+    return f'https://chromedriver.storage.googleapis.com/{chromedriver_version}/chromedriver_{os_id}.zip'
 
 
 def get_chromedriver():
