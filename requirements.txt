@@ -4,7 +4,7 @@ cachetools==4.2.4
 certifi==2022.12.7
 cffi==1.15.0
 charset-normalizer==2.0.9
-cryptography==36.0.0
+cryptography==39.0.1
 google-api-core==2.2.2
 google-auth==2.3.3
 google-cloud-speech==2.11.1
