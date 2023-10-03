@@ -33,5 +33,5 @@ trio==0.19.0
 trio-websocket==0.9.2
 typing-inspect==0.7.1
 typing_extensions==4.0.1
-urllib3==1.26.7
+urllib3==1.26.17
 wsproto==1.0.0
